@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertisseur YouTube/SoundCloud vers MP3</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Convertisseur vidéo vers MP3</h1>
+
+        <div class="input-group">
+            <label for="links-file">Fichier de liens (.txt)</label>
+            <input type="file" id="links-file" accept=".txt">
+            <small>Le fichier doit contenir un lien par ligne</small>
+        </div>
+
+        <button id="downloadBtn" class="button">Télécharger</button>
+        <button id="convertBtn" class="button" disabled>Convertir en MP3</button>
+
+        <div id="downloadsList">
+            <!-- Les éléments téléchargés seront ajoutés ici dynamiquement -->
+        </div>
+    </div>
+
+    <script>
+        let downloadedFiles = [];
+
+        document.getElementById('links-file').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const links = e.target.result.split('\n').filter(link => link.trim());
+                if (links.length === 0) {
+                    alert('Le fichier est vide ou ne contient pas de liens valides');
+                    return;
+                }
+                processLinks(links);
+            };
+            reader.readAsText(file);
+        });
+
+        async function processLinks(links) {
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        urls: links
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    downloadedFiles = data.files;
+                    updateDownloadsList();
+                    document.getElementById('convertBtn').disabled = false;
+                } else {
+                    alert('Erreur lors du téléchargement: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erreur lors du téléchargement: ' + error.message);
+            }
+        }
+
+        document.getElementById('convertBtn').addEventListener('click', async function() {
+            if (downloadedFiles.length === 0) return;
+
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        files: downloadedFiles
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Conversion terminée avec succès!');
+                    downloadedFiles = [];
+                    updateDownloadsList();
+                    document.getElementById('convertBtn').disabled = true;
+                } else {
+                    alert('Erreur lors de la conversion: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erreur lors de la conversion: ' + error.message);
+            }
+        });
+
+        function updateDownloadsList() {
+            const container = document.getElementById('downloadsList');
+            container.innerHTML = '';
+
+            downloadedFiles.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'download-item';
+                item.innerHTML = `
+                    <span>${file.name}</span>
+                    <span class="status ${file.status}">${file.status}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html>
